@@ -1,0 +1,258 @@
+substitutions:
+  name: feeder-Binx
+  cat_name: Binx
+  device_description: "Petkit Solo"
+  default_scoops: "2"
+
+esphome:
+  name: $name
+  comment: $device_description
+  on_boot:
+    - light.turn_on:
+        id: led
+        effect: fast_blink
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+ota:
+
+web_server:
+  local: true
+  ota: false
+
+logger:
+  level: INFO
+  baud_rate: 0
+
+globals:
+  - id: default_scoops
+    type: int
+    initial_value: '${default_scoops}'
+  - id: scoops_count
+    type: int
+  - id: max_scoops
+    type: int
+  - id: food_sensor_count
+    type: int
+
+api:
+  services:
+    - service: feed_cat
+      variables:
+        scoops: int
+      then:
+        - logger.log:
+            level: INFO
+            format: "feed_cat service called (scoops = %d)"
+            args: [ scoops ]
+        - lambda: |-
+            id(scoops_count) = 0;
+            id(food_sensor_count) = 0;
+            id(max_scoops) = scoops;
+        - switch.turn_on: feed_forward
+
+light:
+  - platform: binary
+    name: Status Led
+    id: led
+    output: led_output
+    effects:
+      - strobe:
+          name: fast_blink
+          colors:
+            - state: True
+              duration: 125ms
+            - state: False
+              duration: 125ms
+    internal: True
+
+output:
+  - id: led_output
+    platform: gpio
+    pin: GPIO5
+
+interval:
+  - interval: 1s
+    then:
+      if:
+        condition:
+          wifi.connected:
+        then:
+          - light.turn_on:
+              id: led
+              effect: None
+        else:
+          - light.turn_on:
+              id: led
+              effect: fast_blink
+
+uart:
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+  baud_rate: 9600
+
+binary_sensor:
+  - name: "Manual Feed Button"
+    id: manual_feed_button
+    platform: gpio
+    pin: 
+      number: GPIO34
+      inverted: true
+    on_press:
+      then:
+        - lambda: |-
+            id(scoops_count) = 0;
+            id(food_sensor_count) = 0;
+            id(max_scoops) = id(default_scoops);
+        - switch.turn_on: feed_forward
+        - logger.log:
+            level: INFO
+            format: "Serving %d scoops"
+            args: [ id(max_scoops) ]
+    internal: true
+
+  - name: "Motor Sensor"
+    id: motor_sensor
+    platform: gpio
+    pin: 
+      number: GPIO27
+      inverted: true
+    on_press:
+      then:
+        - lambda: |-
+            id(scoops_count) += 1;
+            if (id(scoops_count) == id(max_scoops)) {
+              id(feed_forward).turn_off();
+            }
+        - logger.log:
+            level: INFO
+            format: "%d/%d scoops served"
+            args: [ id(scoops_count), id(max_scoops) ]
+    internal: true
+
+  - name: "Infared Feed Sensor"
+    id: feed_sensor
+    platform: gpio
+    pin: 
+      number: GPIO14
+    on_press:
+      then:
+        - lambda: |-
+            id(food_sensor_count) += 1;
+    internal: true
+
+switch:
+  - name: "Enable Sensors"
+    id: enable_sensors
+    platform: gpio
+    pin: 
+      number: GPIO33
+    restore_mode: ALWAYS_ON
+    disabled_by_default: true
+    internal: true
+
+  - name: "Enable Feeder Motor"
+    id: enable_feeder_motor
+    platform: gpio
+    pin: 
+      number: GPIO19
+    restore_mode: ALWAYS_OFF
+    disabled_by_default: true
+    on_turn_off:
+      then:
+        - if:
+            condition:
+              lambda: |-
+                return id(food_sensor_count) == 0;
+            then:
+              - homeassistant.event:
+                  event: "esphome.cat_feeder_empty"
+                  data:
+                    message: "${cat_name}'s feeder is empty"
+              - homeassistant.service:
+                  service: persistent_notification.create
+                  data:
+                    message: "${cat_name}'s feeder is empty"
+              - logger.log:
+                  level: ERROR
+                  format: "Food not dispensed"
+    internal: true
+
+  - name: "Feed Forward"
+    id: feed_forward
+    platform: gpio
+    pin: 
+      number: GPIO18
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      then:
+        - switch.turn_on: enable_feeder_motor
+    on_turn_off:
+      then:
+        - switch.turn_off: enable_feeder_motor
+    internal: true
+
+  - name: "Feeder Reverse"
+    id: feed_reverse
+    platform: gpio
+    pin: 
+      number: GPIO17
+    restore_mode: ALWAYS_OFF
+    internal: true
+
+  - name: "$cat_name's feeder"
+    id: feed_cat
+    platform: template
+    turn_on_action:
+      - lambda: |-
+            id(scoops_count) = 0;
+            id(food_sensor_count) = 0;
+            id(max_scoops) = id(default_scoops);
+      - switch.turn_on: feed_forward
+      - logger.log:
+          level: INFO
+          format: "Serving %d scoops"
+          args: [ id(max_scoops) ]
+
+sensor:
+  - platform: wifi_signal
+    name: "$cat_name's feeder signal"
+    update_interval: 60s
+
+button:
+  - platform: restart
+    name: "$cat_name's feeder restart"
+
+
+      
+    Reddit
+    reReddit: Top posts of 2023
+
+Trending topics today
+
+    Diane Keaton dead at 79
+    X-Men '97 renewed for S3
+    John Cena beats AJ Styles
+    Vacherot stuns Djokovic
+    Wonder Man trailer debuts
+    Norway thrashes Israel 5-0
+    Tron: Ares divides fans
+    Liverpool legends edge Chelsea
+    One-Punch Man S3 trailer
+    Mariners win 15-inning epic
+    Wicked: For Good awards set
+    Hamilton's LEGO Roscoe tribute
+    Knightfall gets animated
+    Invincible S4 teaser drops
+    World Cup qualifiers heat up
+    Billie Eilish pulled in Miami
+    Yellowjackets ending at S4
+    Megan Fox joins FNAF 2
+    Aces win 2025 WNBA title
+    Deadpool nearly appeared in Peacemaker
+    Wonder Man teaser drops
+
+Reddit Rules Privacy Policy User Agreement Accessibility Reddit, Inc. © 2025. All rights reserved.
