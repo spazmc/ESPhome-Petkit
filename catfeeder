@@ -1,0 +1,128 @@
+esphome:
+  name: catfeed-1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: WARN
+  baud_rate: 0
+
+# Enable Home Assistant API
+api: { "password": !secret api_password, "encryption": { "key": !secret noise_encryption_key }, reboot_timeout: !secret reboot_timeout }
+ota: { "password": !secret ota_password }
+
+captive_portal:
+#web_server:
+
+uart:
+  rx_pin: GPIO3
+  tx_pin: GPIO1
+  baud_rate: 9600
+
+binary_sensor:
+  - name: "Manual Feed Button"
+    id: catfeed1_manual_feed_button
+    platform: gpio
+    pin: 
+      number: GPIO34
+      inverted: true
+    on_press:
+      then:
+        - switch.turn_on: catfeed1_feeder_forward
+
+  - name: "Motor Sensor"
+    id: catfeed1_motor_sensor
+    platform: gpio
+    pin: 
+      number: GPIO27
+      inverted: true
+    on_press:
+      then:
+        - switch.turn_off: catfeed1_feeder_forward
+        - switch.turn_off: catfeed1_feeder_reverse
+     
+  - name: "Infared Feed Sensor"
+    id: catfeed1_feed_sensor
+    platform: gpio
+    pin: 
+      number: GPIO14
+    filters:
+      - delayed_off: 4s
+
+
+switch:
+  - name: "LED"
+    id: catfeed1_led
+    platform: gpio
+    pin: 
+      number: GPIO05
+
+  - name: "Enable Feeder Motor"
+    id: catfeed1_enable_feeder_motor
+    platform: gpio
+    pin: 
+      number: GPIO19
+    restore_mode: ALWAYS_OFF
+    disabled_by_default: true
+    internal: true
+    
+  - name: "Enable Sensors"
+    id: catfeed1_enable_sensors
+    platform: gpio
+    pin: 
+      number: GPIO33
+    restore_mode: ALWAYS_ON
+    disabled_by_default: true
+    internal: true
+    
+  - name: "Feeder Forward"
+    id: catfeed1_feeder_forward
+    platform: gpio
+    pin: 
+      number: GPIO18
+    interlock: &interlock_group [catfeed1_feeder_forward, catfeed1_feeder_reverse]
+    restore_mode: ALWAYS_OFF
+    interlock_wait_time: 1s
+    on_turn_on:
+      then:
+        - switch.turn_on: catfeed1_enable_feeder_motor
+        - delay: 3s
+        - if:
+            condition:
+              binary_sensor.is_on: catfeed1_feed_sensor
+            then:
+              - homeassistant.event:
+                  event: esphome.catfeeder_food_dispensed
+                  data:
+                    message: Food Was Dispensed
+              - logger.log: "Food was dispensed!"
+            else:
+              - homeassistant.event:
+                  event: esphome.catfeeder_food_dispensed
+                  data:
+                    message: Food Was Not Dispensed!
+              - logger.log: "Food was not dispensed!"      
+              
+    on_turn_off:
+      then:
+        - switch.turn_off: catfeed1_enable_feeder_motor
+        
+  - name: "Feeder Reverse"
+    id: catfeed1_feeder_reverse
+    platform: gpio
+    pin: 
+      number: GPIO17
+    interlock: *interlock_group
+    restore_mode: ALWAYS_OFF
+    interlock_wait_time: 1s
+    disabled_by_default: true
+    on_turn_on:
+      then:
+        - switch.turn_on: catfeed1_enable_feeder_motor
+    on_turn_off:
+      then:
+        - switch.turn_off: catfeed1_enable_feeder_motor
