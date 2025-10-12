@@ -1,0 +1,12 @@
+binary_sensor:
+  - name: "WiFi Button"
+    id: wifi_button
+    platform: gpio
+    pin: 
+      number: GPIO0
+      inverted: true
+    on_press:
+      then:
+        - wifi.disable
+        - wifi.enable
+    internal: true
