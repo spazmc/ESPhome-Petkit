@@ -1,0 +1,7 @@
+output:
+  - platform: ledc
+    pin: GPIO16
+    id: rtttl_out
+
+rtttl:
+  output: rtttl_out
