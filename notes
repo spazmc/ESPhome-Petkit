@@ -7,3 +7,7 @@ Thanks to this post of pinkpandahug I was able to install Esphome in my Petkit S
 The board is very easy to flash, the pins are all identified except for the IO0, it says KEY_WIFI.
 
 I made some modifications to the YAML file and wanted to share: 
+
+https://www.reddit.com/r/Esphome/comments/v19c7p/esphome_on_petkit_solo_feeder/
+
+https://www.reddit.com/r/Esphome/comments/108nqwc/esphome_on_petkit_solo_feeder_credits_to/
